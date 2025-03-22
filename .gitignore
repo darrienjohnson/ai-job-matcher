@@ -1,0 +1,35 @@
+# IDEs & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Java & Build Artifacts
+/target/
+*.class
+*.jar
+*.war
+
+# Logs & Temp Files
+logs/
+*.log
+tmp/
+
+# Maven
+.mvn/
+
+# Sensitive Config Files
+.env
+application.properties
+application.yml
+/src/main/resources/application.properties
+
+# Database Dumps
+*.sql
+dump.rdb
+
+# IntelliJ
+shelf/
+workspace.xml
