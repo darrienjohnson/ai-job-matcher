@@ -1,4 +1,6 @@
 package com.menoson.ai_job_matcher.controller;
+import com.menoson.ai_job_matcher.dto.JobMatchDTO;
+
 
 import com.menoson.ai_job_matcher.entity.Resume;
 import com.menoson.ai_job_matcher.service.ResumeService;
@@ -35,6 +37,14 @@ public class ResumeController {
         Optional<Resume> resume = resumeService.getResumeById(id);
         return resume.map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    // Returns a list of matching jobs with a match score for the given resume
+    // Fetches the resume (i.e. ID = 1) Gets the resume skills, compares those skills to all jobs in database, returns only the jobs that match with non-zero score
+    @GetMapping("/{id}/matches")
+    public ResponseEntity<List<JobMatchDTO>> getJobMatches(@PathVariable Long id) {
+        List<JobMatchDTO> matches = resumeService.getMatchingJobs(id);
+        return ResponseEntity.ok(matches);
     }
 
     @PostMapping("/upload")

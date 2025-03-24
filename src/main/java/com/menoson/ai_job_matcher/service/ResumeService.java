@@ -7,18 +7,19 @@ import org.apache.tika.exception.TikaException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.*;
 import java.util.regex.*;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
+import com.menoson.ai_job_matcher.dto.JobMatchDTO;
+import com.menoson.ai_job_matcher.entity.Job;
+import com.menoson.ai_job_matcher.repository.JobRepository;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.logging.Logger;
@@ -30,9 +31,11 @@ public class ResumeService {
     private static final String UPLOAD_DIR = "uploads/";
     private final Tika tika;
     private static final Logger LOGGER = Logger.getLogger(ResumeService.class.getName());
+    private final JobRepository jobRepository;
 
-    public ResumeService(ResumeRepository resumeRepository) {
+    public ResumeService(ResumeRepository resumeRepository, JobRepository jobRepository) {
         this.resumeRepository = resumeRepository;
+        this.jobRepository = jobRepository;
         this.tika = new Tika();
     }
 
@@ -73,6 +76,64 @@ public class ResumeService {
         resume.setUploadedAt(java.time.LocalDateTime.now());
 
         return resumeRepository.save(resume);
+    }
+
+    public List<JobMatchDTO> getMatchingJobs(Long resumeId) {
+        Optional<Resume> resumeOpt = resumeRepository.findById(resumeId);
+        if (resumeOpt.isEmpty()) return Collections.emptyList();
+
+        Resume resume = resumeOpt.get();
+
+        // Clean the 'skills' string from the resume
+        String cleanedSkills = resume.getSkills()
+                .replaceAll("(?i)(Programming:|Frameworks.*?:|Cloud.*?:)", "") // remove headings like "Programming:", case-insensitive
+                .replaceAll("\\n", ",") // convert line breaks to commas (so each line becomes a separate skill)
+                .replaceAll("\\s+", " ") // normalize extra spaces to a single space
+                .replaceAll("\\(.*?\\)", "") // remove anything inside parentheses (e.g., AWS (S3, RDS))
+                .trim(); // remove leading/trailing whitespace
+
+        // Split the cleaned skills string into an array, separated by commas
+        String[] resumeSkills = cleanedSkills.split(",\\s*"); // split on comma + optional space
+
+        // Debugging - print extracted skills to console for verification
+        System.out.println("Cleaned & Split Skills: " + Arrays.toString(resumeSkills));
+
+        // Create a list to hold matching job results
+        List<JobMatchDTO> matches = new ArrayList<>();
+
+        // Loop through all jobs in the database
+        for (Job job : jobRepository.findAll()) {
+            int matchCount = 0;
+
+            // Get the job description, convert to lowercase, and normalize whitespace
+            String jobText = job.getDescription().toLowerCase().replaceAll("\\s+", " ");
+
+            // Compare each resume skill to the job description
+            for (String skill : resumeSkills) {
+                if (jobText.contains(skill.toLowerCase())) {
+                    matchCount++; // Increment counter for each skill match found
+                }
+            }
+
+            double matchScore = resumeSkills.length > 0 ? (double) matchCount / resumeSkills.length : 0.0;
+
+            // If there's at least one match, create a DTO and add it to the results
+            if (matchScore > 0) {
+                matches.add(new JobMatchDTO(
+                        job.getTitle(),
+                        job.getCompany(),
+                        job.getLocation(),
+                        job.getDescription(),
+                        matchScore
+                ));
+            }
+        }
+
+        // Sort the list of matches in descending order by match score
+        matches.sort((a, b) -> Double.compare(b.getMatchScore(), a.getMatchScore()));
+
+        // Return the sorted list of job matches
+        return matches;
     }
 
 

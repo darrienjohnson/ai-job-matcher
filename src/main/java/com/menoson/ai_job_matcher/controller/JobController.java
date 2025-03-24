@@ -8,9 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
-@RestController
-@RequestMapping("/api")
+// Handles HTTP requests for Job data
+@RestController //tells Spring this class handles API requests and returns JSON responses
+@RequestMapping("/api") //sets base URL
 public class JobController {
 
     private final JobRepository jobRepository;
@@ -22,9 +22,10 @@ public class JobController {
         this.jobService = jobService;
     }
 
+    //retrieves all job records from the DB using the repository
     @GetMapping("/jobs")
     public List<Job> getAllJobs() {
-        return jobRepository.findAll();
+        return jobService.getAllJobs();
     }
 
     @PostMapping("/jobs")

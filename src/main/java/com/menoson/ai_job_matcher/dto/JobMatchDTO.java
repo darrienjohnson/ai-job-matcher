@@ -1,34 +1,21 @@
-package com.menoson.ai_job_matcher.entity;
+package com.menoson.ai_job_matcher.dto;
 
-import jakarta.persistence.*; // includes JPA annotations for database mapping
-
-@Entity //Marks this class as a JPA entity meaning it should be mapped to a DB table
-@Table(name = "jobs") // sets database table name to jobs
-public class Job {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // automatically generates a unique ID for each row using database's identity column strategy
-    private Long id; // primary key
-    // each becomes a column in the jobs table
+public class JobMatchDTO {
     private String title;
     private String company;
     private String location;
     private String description;
+    private double matchScore; // value between 0.0 - 1.0
 
-    // Constructors
-    public Job() {}
-
-    public Job(String title, String company, String location, String description) {
+    public JobMatchDTO(String title, String company, String location, String description, double matchScore) {
         this.title = title;
         this.company = company;
         this.location = location;
         this.description = description;
+        this.matchScore = matchScore;
     }
 
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
@@ -40,4 +27,7 @@ public class Job {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public double getMatchScore() { return matchScore; }
+    public void setMatchScore(double matchScore) { this.matchScore = matchScore; }
 }
