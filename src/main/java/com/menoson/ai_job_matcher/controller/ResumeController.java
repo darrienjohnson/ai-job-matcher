@@ -9,12 +9,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 
 import java.io.IOException;
 
+@CrossOrigin(origins = "http://localhost:3000")  // 👈 allow requests from frontend
 @RestController
 @RequestMapping("/api/resumes")
 public class ResumeController {
@@ -57,11 +60,24 @@ public class ResumeController {
         }
 
         try {
+            // Save resume and file
             Resume savedResume = resumeService.uploadResume(file, candidateName, email);
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedResume);
+
+            // Build public file URL
+            String fileUrl = "http://localhost:8080/" + savedResume.getFilePath();
+
+            // Prepare response body with resume + URL
+            Map<String, Object> responseBody = new HashMap<>();
+            responseBody.put("resume", savedResume);
+            responseBody.put("fileUrl", fileUrl);
+
+            // Return 201 Created with full response
+            return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
+
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to upload file: " + e.getMessage());
         }
     }
+
 }
