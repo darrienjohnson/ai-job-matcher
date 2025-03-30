@@ -17,7 +17,7 @@ import java.util.Optional;
 
 import java.io.IOException;
 
-@CrossOrigin(origins = "http://localhost:3000")  // 👈 allow requests from frontend
+@CrossOrigin(origins = "*") // Not for production, REMEMBER TO CHANGE LATER
 @RestController
 @RequestMapping("/api/resumes")
 public class ResumeController {
