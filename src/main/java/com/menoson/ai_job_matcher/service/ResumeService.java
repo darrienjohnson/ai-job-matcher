@@ -32,10 +32,13 @@ public class ResumeService {
     private final Tika tika;
     private static final Logger LOGGER = Logger.getLogger(ResumeService.class.getName());
     private final JobRepository jobRepository;
+    private final MatchingService matchingService;
 
-    public ResumeService(ResumeRepository resumeRepository, JobRepository jobRepository) {
+
+    public ResumeService(ResumeRepository resumeRepository, JobRepository jobRepository, MatchingService matchingService) {
         this.resumeRepository = resumeRepository;
         this.jobRepository = jobRepository;
+        this.matchingService = matchingService;
         this.tika = new Tika();
     }
 
@@ -62,7 +65,7 @@ public class ResumeService {
 
         // Extract structured data
         String skills = extractSection(fullText, "Skills");
-        String experience = extractSection(fullText, "Professional Experiences");
+        String experience = extractSection(fullText, "Professional Experience");
         String education = extractSection(fullText, "Education and Certifications");
 
         // Create Resume entry in DB
@@ -81,59 +84,7 @@ public class ResumeService {
     public List<JobMatchDTO> getMatchingJobs(Long resumeId) {
         Optional<Resume> resumeOpt = resumeRepository.findById(resumeId);
         if (resumeOpt.isEmpty()) return Collections.emptyList();
-
-        Resume resume = resumeOpt.get();
-
-        // Clean the 'skills' string from the resume
-        String cleanedSkills = resume.getSkills()
-                .replaceAll("(?i)(Programming:|Frameworks.*?:|Cloud.*?:)", "") // remove headings like "Programming:", case-insensitive
-                .replaceAll("\\n", ",") // convert line breaks to commas (so each line becomes a separate skill)
-                .replaceAll("\\s+", " ") // normalize extra spaces to a single space
-                .replaceAll("\\(.*?\\)", "") // remove anything inside parentheses (e.g., AWS (S3, RDS))
-                .trim(); // remove leading/trailing whitespace
-
-        // Split the cleaned skills string into an array, separated by commas
-        String[] resumeSkills = cleanedSkills.split(",\\s*"); // split on comma + optional space
-
-        // Debugging - print extracted skills to console for verification
-        System.out.println("Cleaned & Split Skills: " + Arrays.toString(resumeSkills));
-
-        // Create a list to hold matching job results
-        List<JobMatchDTO> matches = new ArrayList<>();
-
-        // Loop through all jobs in the database
-        for (Job job : jobRepository.findAll()) {
-            int matchCount = 0;
-
-            // Get the job description, convert to lowercase, and normalize whitespace
-            String jobText = job.getDescription().toLowerCase().replaceAll("\\s+", " ");
-
-            // Compare each resume skill to the job description
-            for (String skill : resumeSkills) {
-                if (jobText.contains(skill.toLowerCase())) {
-                    matchCount++; // Increment counter for each skill match found
-                }
-            }
-
-            double matchScore = resumeSkills.length > 0 ? (double) matchCount / resumeSkills.length : 0.0;
-
-            // If there's at least one match, create a DTO and add it to the results
-            if (matchScore > 0) {
-                matches.add(new JobMatchDTO(
-                        job.getTitle(),
-                        job.getCompany(),
-                        job.getLocation(),
-                        job.getDescription(),
-                        matchScore
-                ));
-            }
-        }
-
-        // Sort the list of matches in descending order by match score
-        matches.sort((a, b) -> Double.compare(b.getMatchScore(), a.getMatchScore()));
-
-        // Return the sorted list of job matches
-        return matches;
+        return matchingService.matchJobs(resumeOpt.get(), jobRepository.findAll());
     }
 
 
@@ -144,10 +95,20 @@ public class ResumeService {
             String fullText = pdfStripper.getText(document);
             document.close();
 
-            // Debugging - print extracted text
-            LOGGER.info("Extracted Resume Text: \n" + fullText);
+            // Normalize common PDF formatting issues
+            fullText = fullText
+                    .replaceAll("-\\s*\\n\\s*", "")     // fix hyphenated line breaks
+                    .replaceAll("\\n+", "\n")           // collapse multiple line breaks
+                    .replaceAll("\\s{2,}", " ")          // normalize extra spaces
+                    .replaceAll("(?m)^\\s+", "")         // trim line starts
+                    .replaceAll("(?m)\\s+$", "")         // trim line ends
+                    .trim();
+
+            // Optional: log output for verification
+            LOGGER.info("Extracted and Normalized Resume Text:\n" + fullText);
 
             return fullText;
+
         } catch (IOException e) {
             e.printStackTrace();
             return "Error extracting text";
@@ -155,51 +116,113 @@ public class ResumeService {
     }
 
 
+
     private String extractSkills(String text) {
-        String[] skillKeywords = {
-                "Java", "Python", "SQL", "Spring Boot", "React", "Angular", "AWS", "Docker",
-                "Machine Learning", "Data Analysis", "PostgreSQL", "REST API", "Git", "Kubernetes", "CI/CD",
-                "TensorFlow", "Flask", "Node.js", "GraphQL", "TypeScript", "Cloud Computing"
+        String lower = text.toLowerCase();
+
+        int start = lower.indexOf("skills");
+        if (start == -1) return "";
+
+        // Find the next known section after skills
+        int end = Integer.MAX_VALUE;
+        String[] stopSections = {
+                "professional experience", "experience", "education", "certifications", "projects", "summary",
+                "professional experience"
         };
 
-        StringBuilder foundSkills = new StringBuilder();
-        for (String skill : skillKeywords) {
-            if (Pattern.compile("\\b" + skill + "\\b", Pattern.CASE_INSENSITIVE).matcher(text).find()) {
-                foundSkills.append(skill).append(", ");
+        for (String stop : stopSections) {
+            int stopIndex = lower.indexOf(stop, start + 6); // avoid matching the 'skills' word itself
+            if (stopIndex != -1 && stopIndex < end) {
+                end = stopIndex;
             }
         }
 
-        return foundSkills.length() > 0 ? foundSkills.substring(0, foundSkills.length() - 2) : "No skills found";
+        // Extract substring between skills and next section
+        String rawSkills = text.substring(start, Math.min(end, text.length()));
+
+        // Cleanup formatting
+        return rawSkills
+                .replaceAll("(?i)^skills\\s*[:\\-]*", "")    // Remove "Skills" heading
+                .replaceAll("(?m)^\\s*•\\s*", "")            // remove bullets
+                .replaceAll("\\s{2,}", " ")                  // collapse multiple spaces
+                .replaceAll("\\n+", ", ")                    // convert line breaks to commas
+                .replaceAll(",\\s*,", ",")                   // clean double commas
+                .replaceAll("\\(.*?\\)", "")                 // remove parentheses
+                .replaceAll(":+", ":")                       // normalize colons
+                .trim();
+    }
+
+
+
+
+    private String extractEducation(String text) {
+        return extractFlexibleSection(text, new String[] {
+                "Education", "Education and Certifications", "Academic Background"
+        });
     }
 
     private String extractExperience(String text) {
-        Pattern pattern = Pattern.compile("(\\d+\\s*(years|yrs|year) of experience)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1) : "Experience not found";
-    }
-
-    private String extractEducation(String text) {
-        String[] educationKeywords = {
-                "Bachelor", "Master", "PhD", "B.Sc", "M.Sc", "Associate", "Doctorate", "MBA", "BS", "MS", "BA", "MA"
-        };
-
-        StringBuilder foundEducation = new StringBuilder();
-        for (String degree : educationKeywords) {
-            if (Pattern.compile("\\b" + degree + "\\b", Pattern.CASE_INSENSITIVE).matcher(text).find()) {
-                foundEducation.append(degree).append(", ");
-            }
-        }
-
-        return foundEducation.length() > 0 ? foundEducation.substring(0, foundEducation.length() - 2) : "Education not found";
+        return extractFlexibleSection(text, new String[] {
+                "Experience", "Work Experience", "Professional Experiences", "Employment History"
+        });
     }
 
     private String extractSection(String text, String sectionName) {
-        Pattern pattern = Pattern.compile(sectionName + "\\s*(.*?)\\s*(?=\\n\\S+:|$)", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(text);
+        String lower = text.toLowerCase();
+        String sectionStart = sectionName.toLowerCase();
 
-        if (matcher.find()) {
-            return matcher.group(1).trim();
+        int startIndex = lower.indexOf(sectionStart);
+        if (startIndex == -1) return "";
+
+        // Known headers that signal the end of a section
+        String[] stopSections = {
+                "professional experience", "experience", "education", "certifications", "projects", "summary"
+        };
+
+        int endIndex = text.length();
+        for (String stop : stopSections) {
+            int stopIdx = lower.indexOf(stop, startIndex + sectionStart.length());
+            if (stopIdx != -1 && stopIdx < endIndex) {
+                endIndex = stopIdx;
+            }
+        }
+
+        return text.substring(startIndex, endIndex)
+                .replaceAll("(?i)^skills\\s*[:\\-]*", "")    // Remove heading if it's "Skills"
+                .replaceAll("(?m)^\\s*•\\s*", "")            // remove bullets
+                .replaceAll("\\s{2,}", " ")                  // collapse spaces
+                .replaceAll("\\n+", ", ")                    // convert line breaks to commas
+                .replaceAll(",\\s*,", ",")                   // clean double commas
+                .replaceAll("\\(.*?\\)", "")                 // remove parentheses
+                .replaceAll(":+", ":")                       // normalize colons
+                .trim();
+    }
+
+
+    private String extractFlexibleSection(String text, String[] sectionNames) {
+        for (String section : sectionNames) {
+            Pattern pattern = Pattern.compile(
+                    "(?i)" + Pattern.quote(section) +      // Match section title (case-insensitive)
+                            "\\s*\\n+" +                           // Followed by one or more line breaks
+                            "(.*?)" +                              // Capture everything lazily...
+                            "(?=\\n{2,}|\\n[A-Z][^\\n]*\\n|\\z)",  // ...until two newlines or next heading or end
+                    Pattern.DOTALL
+            );
+
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                String content = matcher.group(1).trim()
+                        .replaceAll("•", "-")                // Replace bullet points with dashes
+                        .replaceAll("-\\s*\\n\\s*", "")      // Join hyphenated line-breaks
+                        .replaceAll("\\n+", ", ")            // Replace newlines with commas
+                        .replaceAll("\\s{2,}", " ")          // Collapse multiple spaces
+                        .replaceAll(",\\s*,", ",")           // Clean double commas
+                        .replaceAll("\\(.*?\\)", "")         // Remove parentheses
+                        .trim();
+                return content;
+            }
         }
         return "";
     }
+
 }
