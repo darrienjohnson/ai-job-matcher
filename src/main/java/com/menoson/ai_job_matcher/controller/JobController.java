@@ -34,6 +34,12 @@ public class JobController {
         return new ResponseEntity<>(savedJob, HttpStatus.CREATED);
     }
 
+    @PostMapping("/jobs/bulk")
+    public ResponseEntity<?> createJobs(@RequestBody List<Job> jobs) {
+        jobRepository.saveAll(jobs);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
     @PutMapping("/jobs/{id}")
     public ResponseEntity<Job> updateJob(@PathVariable Long id, @RequestBody Job job) {
         Job updatedJob = jobService.updateJob(id, job);
