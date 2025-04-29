@@ -4,6 +4,7 @@ import com.menoson.ai_job_matcher.entity.Resume;
 import com.menoson.ai_job_matcher.repository.ResumeRepository;
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,7 +36,7 @@ public class ResumeService {
     private final MatchingService matchingService;
 
 
-    public ResumeService(ResumeRepository resumeRepository, JobRepository jobRepository, MatchingService matchingService) {
+    public ResumeService(ResumeRepository resumeRepository, JobRepository jobRepository, @Qualifier("matchingServiceImpl") MatchingService matchingService) {
         this.resumeRepository = resumeRepository;
         this.jobRepository = jobRepository;
         this.matchingService = matchingService;

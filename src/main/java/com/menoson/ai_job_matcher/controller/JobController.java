@@ -1,8 +1,13 @@
 package com.menoson.ai_job_matcher.controller;
 
+import com.menoson.ai_job_matcher.dto.JobMatchDTO;
 import com.menoson.ai_job_matcher.entity.Job;
+import com.menoson.ai_job_matcher.entity.Resume;
 import com.menoson.ai_job_matcher.repository.JobRepository;
 import com.menoson.ai_job_matcher.service.JobService;
+import com.menoson.ai_job_matcher.service.MatchingService;
+import com.menoson.ai_job_matcher.service.ResumeService;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,11 +20,15 @@ public class JobController {
 
     private final JobRepository jobRepository;
     private final JobService jobService;
+    private final ResumeService resumeService;
+    private final MatchingService matchingService;
 
     // Constructor-based injection (preferred)
-    public JobController(JobRepository jobRepository, JobService jobService) {
+    public JobController(JobRepository jobRepository, JobService jobService, ResumeService resumeService, @Qualifier("matchingServiceImpl") MatchingService matchingService) {
         this.jobRepository = jobRepository;
         this.jobService = jobService;
+        this.resumeService = resumeService;
+        this.matchingService = matchingService;
     }
 
     //retrieves all job records from the DB using the repository
@@ -57,5 +66,14 @@ public class JobController {
         } else {
             return ResponseEntity.notFound().build(); // 404 Not Found
         }
+    }
+
+    @GetMapping("/match")
+    public ResponseEntity<List<JobMatchDTO>> matchJobs(@RequestParam Long resumeId) {
+        Resume resume = resumeService.getResumeById(resumeId)
+                .orElseThrow(() -> new RuntimeException("Resume not found with ID: " + resumeId));
+        List<Job> allJobs = jobService.getAllJobs();
+        List<JobMatchDTO> matches = matchingService.matchJobs(resume, allJobs);
+        return ResponseEntity.ok(matches);
     }
 }

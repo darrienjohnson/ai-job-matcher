@@ -1,5 +1,7 @@
 package com.menoson.ai_job_matcher.dto;
 
+import com.menoson.ai_job_matcher.entity.Job;
+
 public class JobMatchDTO {
     private String title;
     private String company;
@@ -13,6 +15,10 @@ public class JobMatchDTO {
         this.location = location;
         this.description = description;
         this.matchScore = matchScore;
+    }
+
+    public JobMatchDTO() {
+        // No-arg constructor for frameworks like Jackson or for manual setters
     }
 
     // Getters and Setters
@@ -30,4 +36,12 @@ public class JobMatchDTO {
 
     public double getMatchScore() { return matchScore; }
     public void setMatchScore(double matchScore) { this.matchScore = matchScore; }
+
+    public void setJob(Job job) {
+        this.title = job.getTitle();
+        this.company = job.getCompany();
+        this.location = job.getLocation();
+        this.description = job.getDescription();
+    }
+
 }

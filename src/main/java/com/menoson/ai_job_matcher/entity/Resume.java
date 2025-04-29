@@ -47,4 +47,13 @@ public class Resume {
     public void setFilePath(String filePath) { this.filePath = filePath; }
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
+
+    public String getText() {
+        return String.join(" ",
+                this.skills != null ? this.skills : "",
+                this.experience != null ? this.experience : "",
+                this.education != null ? this.education : ""
+        ).trim();
+    }
+
 }

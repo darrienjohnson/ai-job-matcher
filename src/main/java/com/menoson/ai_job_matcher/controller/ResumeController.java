@@ -4,6 +4,7 @@ import com.menoson.ai_job_matcher.dto.JobMatchDTO;
 
 import com.menoson.ai_job_matcher.entity.Resume;
 import com.menoson.ai_job_matcher.service.ResumeService;
+import com.menoson.ai_job_matcher.repository.ResumeRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,9 +24,12 @@ import java.io.IOException;
 public class ResumeController {
 
     private final ResumeService resumeService;
+    private final ResumeRepository resumeRepository;
 
-    public ResumeController(ResumeService resumeService) {
+
+    public ResumeController(ResumeService resumeService, ResumeRepository resumeRepository) {
         this.resumeService = resumeService;
+        this.resumeRepository = resumeRepository;
     }
 
     // Get all uploaded resumes
@@ -49,6 +53,13 @@ public class ResumeController {
         List<JobMatchDTO> matches = resumeService.getMatchingJobs(id);
         return ResponseEntity.ok(matches);
     }
+
+    @PostMapping("/resumes")
+    public ResponseEntity<Resume> createResume(@RequestBody Resume resume) {
+        Resume savedResume = resumeRepository.save(resume);
+        return new ResponseEntity<>(savedResume, HttpStatus.CREATED);
+    }
+
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadResume(
